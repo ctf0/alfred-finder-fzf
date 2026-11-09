@@ -14,7 +14,9 @@ const DEFAULT_CACHE_TTL_MS = 60_000;
 const CACHE_VERSION = 3;
 
 function resolveCacheTtlMs() {
-  const raw = process.env.FINDER_FZF_CACHE_TTL;
+  // Alfred workflow configuration variable (`cache_ttl`, seconds);
+  // blank/invalid falls back to the default.
+  const raw = process.env.cache_ttl;
   if (raw === undefined || raw === '') {
     return DEFAULT_CACHE_TTL_MS;
   }
@@ -26,6 +28,10 @@ function resolveCacheTtlMs() {
 }
 
 const CACHE_TTL_MS = resolveCacheTtlMs();
+// Stale-while-revalidate (same derivation as mac-menu-search): items older than
+// the TTL are served instantly while a background re-scan refreshes them; past
+// maxStale they are dropped and a loading state is shown instead.
+const CACHE_MAX_STALE_MS = Math.max(Math.max(CACHE_TTL_MS * 12, CACHE_TTL_MS + 5_000), 30_000);
 const LOADING_ICON = path.join(__dirname, 'icons', 'loading.icns');
 
 function getUserShell() {
@@ -221,16 +227,12 @@ async function readCachedItems(cacheFile) {
   }
   try {
     const stats = await fs.stat(cacheFile);
-    if (Date.now() - stats.mtimeMs > CACHE_TTL_MS) {
-      return undefined;
-    }
-
     const contents = await fs.readFile(cacheFile, 'utf8');
     const parsed = JSON.parse(contents);
     if (parsed.version !== CACHE_VERSION) {
       return undefined;
     }
-    return parsed;
+    return { items: parsed.items, ageMs: Math.max(0, Date.now() - stats.mtimeMs) };
   } catch {
     return undefined;
   }
@@ -259,7 +261,7 @@ async function startWorker(root, query, cacheFile) {
 async function removeStaleLock(lockFile) {
   try {
     const stats = await fs.stat(lockFile);
-    if (Date.now() - stats.mtimeMs > CACHE_TTL_MS) {
+    if (Date.now() - stats.mtimeMs > CACHE_MAX_STALE_MS) {
       await fs.rm(lockFile, { force: true });
     }
   } catch {
@@ -298,10 +300,22 @@ async function main() {
     const cached = await readCachedItems(cacheFile);
 
     if (cached) {
-      output(cached.items);
-      return;
+      if (cached.ageMs <= CACHE_TTL_MS) {
+        // Fresh — serve from cache, no re-scan.
+        output(cached.items);
+        return;
+      }
+
+      if (cached.ageMs <= CACHE_MAX_STALE_MS) {
+        // Stale — serve the old list instantly, re-scan in the background, and
+        // keep re-running Alfred until the refreshed cache lands.
+        await startWorker(root, rawQuery, cacheFile);
+        outputWithRerun(cached.items);
+        return;
+      }
     }
 
+    // Absent or very old — background re-scan with a loading state.
     await startWorker(root, rawQuery, cacheFile);
     outputWithRerun([loadingItem(root, query)]);
   } catch (error) {

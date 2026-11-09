@@ -22,11 +22,11 @@ alfred spawn a terminal call through Node.js "because fzf cant run outside a ter
 
 Your shell sets `FZF_DEFAULT_COMMAND` (typically `fd --max-depth 1 ...`). To search deeper for one query, append a number:
 
-| Typed in Alfred | What happens |
-|---|---|
-| `fff` | All top-level items (default depth) |
-| `fff config` | Top-level items matching "config" |
-| `fff config 3` | Items matching "config" up to 3 levels deep |
+| Typed in Alfred | What happens                                |
+| --------------- | ------------------------------------------- |
+| `fff`           | All top-level items (default depth)         |
+| `fff config`    | Top-level items matching "config"           |
+| `fff config 3`  | Items matching "config" up to 3 levels deep |
 
 The workflow finds `--max-depth N` in your `FZF_DEFAULT_COMMAND` and replaces it with the number you provide, without modifying your shell config.
 
@@ -36,7 +36,7 @@ The workflow finds `--max-depth N` in your `FZF_DEFAULT_COMMAND` and replaces it
 - **Hidden files**: Included when your `FZF_DEFAULT_COMMAND` includes them (the default `fd --hidden` does).
 - **Directories**: Shown as selectable results, sorted before files.
 - **Loading indicator**: A "Searching..." row appears while the background worker runs; Alfred reruns with cached results.
-- **Caching**: Results are cached for 60 seconds by default. Set the `FINDER_FZF_CACHE_TTL` environment variable (in seconds) to change the TTL; `0` disables caching. Cache version is checked to avoid stale entries.
+- **Caching** (stale-while-revalidate): The list is cached and served instantly while it is fresh — under `Cache duration (seconds)` in the workflow settings ([Configure Workflow] in Alfred, blank/invalid fall back to 60). Older entries are still served immediately, refreshed by a background re-scan, and the list updates once the fresh results land. Beyond the stale window (roughly 12× the TTL, minimum 30s) stale entries are dropped and a loading state is shown. Set to `0` to disable caching entirely. Cache version is checked to avoid stale entries.
 - **No Terminal**: Everything happens in the background — no window pops up.
 
 ## Install
@@ -46,7 +46,7 @@ Import `Finder-fzf-Search.alfredworkflow` into Alfred (double-click or drag into
 ## Build from source
 
 - clone repo
-- run 
+- run
     ```bash
     cd path/to/alfred-finder-fzf/src && zip -r ../Finder-fzf-Search.alfredworkflow . -x "*.DS_Store" -x ".*" -x ".*/"
     ```

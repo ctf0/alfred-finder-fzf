@@ -36,7 +36,7 @@ The workflow finds `--max-depth N` in your `FZF_DEFAULT_COMMAND` and replaces it
 - **Hidden files**: Included when your `FZF_DEFAULT_COMMAND` includes them (the default `fd --hidden` does).
 - **Directories**: Shown as selectable results, sorted before files.
 - **Loading indicator**: A "Searching..." row appears while the background worker runs; Alfred reruns with cached results.
-- **Caching**: Results are cached for 60 seconds. Cache version is checked to avoid stale entries.
+- **Caching**: Results are cached for 60 seconds by default. Set the `FINDER_FZF_CACHE_TTL` environment variable (in seconds) to change the TTL; `0` disables caching. Cache version is checked to avoid stale entries.
 - **No Terminal**: Everything happens in the background — no window pops up.
 
 ## Install

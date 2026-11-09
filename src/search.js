@@ -10,8 +10,22 @@ const os = require('node:os');
 const execFileAsync = promisify(execFile);
 const MAX_RESULTS = 100;
 const CACHE_DIR = path.join(os.tmpdir(), 'alfred-finder-fzf');
-const CACHE_TTL_MS = 60_000;
+const DEFAULT_CACHE_TTL_MS = 60_000;
 const CACHE_VERSION = 3;
+
+function resolveCacheTtlMs() {
+  const raw = process.env.FINDER_FZF_CACHE_TTL;
+  if (raw === undefined || raw === '') {
+    return DEFAULT_CACHE_TTL_MS;
+  }
+  const seconds = Number(raw);
+  if (!Number.isFinite(seconds) || seconds < 0) {
+    return DEFAULT_CACHE_TTL_MS;
+  }
+  return Math.round(seconds * 1000);
+}
+
+const CACHE_TTL_MS = resolveCacheTtlMs();
 const LOADING_ICON = path.join(__dirname, 'icons', 'loading.icns');
 
 function getUserShell() {
@@ -202,6 +216,9 @@ function cacheFileFor(root, query) {
 }
 
 async function readCachedItems(cacheFile) {
+  if (CACHE_TTL_MS === 0) {
+    return undefined;
+  }
   try {
     const stats = await fs.stat(cacheFile);
     if (Date.now() - stats.mtimeMs > CACHE_TTL_MS) {

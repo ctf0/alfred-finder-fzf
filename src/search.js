@@ -42,7 +42,7 @@ function isFishShell(shellPath) {
   return path.basename(shellPath) === 'fish';
 }
 
-function buildShellLines(depth, shellPath) {
+function buildShellLines(depth, shellPath, exact = false) {
   const overrideDepth = Number.isInteger(depth) && depth > 0;
   const isFish = isFishShell(shellPath);
   const shellLines = [];
@@ -67,8 +67,8 @@ function buildShellLines(depth, shellPath) {
   }
 
   shellLines.push(isFish
-    ? 'eval "$FZF_DEFAULT_COMMAND" | command fzf --filter "$argv[2]"'
-    : 'eval "$FZF_DEFAULT_COMMAND" | command fzf --filter "$2"');
+    ? `eval "$FZF_DEFAULT_COMMAND" | command fzf${exact ? ' --exact' : ''} --filter "$argv[2]"`
+    : `eval "$FZF_DEFAULT_COMMAND" | command fzf${exact ? ' --exact' : ''} --filter "$2"`);
 
   return shellLines;
 }
@@ -116,9 +116,12 @@ function compareDirectoryFirst(left, right) {
 }
 
 function filterWithFzf(root, query, depth) {
+  // A leading `^` asks for a stricter match: fzf --exact (no fuzzy gaps).
+  const exact = query.startsWith('^');
+  if (exact) query = query.slice(1);
   return new Promise((resolve, reject) => {
     const shell = getUserShell();
-    const shellLines = buildShellLines(depth, shell);
+    const shellLines = buildShellLines(depth, shell, exact);
 
     const fzf = spawn(shell, ['-l', '-c', shellLines.join('\n'), 'finder-fzf', root, query], {
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -277,25 +280,38 @@ async function writeCache(cacheFile, payload) {
   await fs.rename(tempFile, cacheFile);
 }
 
+// Positional options: `<keyword> [depth|-] [up]`.
+//   `cfg 3`   -> depth 3
+//   `cfg 3 2` -> depth 3, start 2 levels up
+//   `cfg - 2` -> default depth, start 2 levels up
+//   up 0 means start from the home directory.
+// Depth can be skipped only with `-`; other non-numbers are an error.
 function parseQueryAndDepth(raw) {
-  const trimmed = (raw || '').trim();
-  if (!trimmed) return { query: '', depth: null };
-
-  const parts = trimmed.split(/\s+/);
-  const last = parts[parts.length - 1];
-
-  if (/^\d+$/.test(last)) {
-    return { query: parts.slice(0, -1).join(' '), depth: parseInt(last, 10) };
+  const parts = (raw || '').trim().split(/\s+/).filter(Boolean);
+  const [query = '', depthArg, upArg] = parts;
+  if (depthArg !== undefined && depthArg !== '-' && !/^\d+$/.test(depthArg)) {
+    throw new Error(`Depth must be a number or "-", got "${depthArg}"`);
   }
+  if (upArg !== undefined && !/^\d+$/.test(upArg)) {
+    throw new Error(`Up must be a number, got "${upArg}"`);
+  }
+  const num = (s) => (s === undefined || s === '-' ? null : parseInt(s, 10));
+  return { query, depth: num(depthArg), up: num(upArg) };
+}
 
-  return { query: trimmed, depth: null };
+function resolveRoot(finderDir, up) {
+  if (up === null || up === undefined) return finderDir;
+  if (up === 0) return os.homedir();
+  let dir = finderDir;
+  for (let i = 0; i < up; i++) dir = path.dirname(dir);
+  return dir;
 }
 
 async function main() {
   try {
     const rawQuery = process.argv[2] || '';
-    const { query, depth } = parseQueryAndDepth(rawQuery);
-    const root = await getFinderDirectory();
+    const { query, up } = parseQueryAndDepth(rawQuery);
+    const root = resolveRoot(await getFinderDirectory(), up);
     const cacheFile = cacheFileFor(root, rawQuery);
     const cached = await readCachedItems(cacheFile);
 

@@ -66,7 +66,7 @@
 				<key>scriptfile</key>
 				<string></string>
 				<key>subtext</key>
-				<string>Search the current Finder folder, including dotfiles</string>
+				<string>fff &lt;keyword&gt; [depth|-] [up]  (up 0 = ~, ^keyword = exact)</string>
 				<key>title</key>
 				<string>Search Finder folder</string>
 				<key>type</key>
@@ -98,7 +98,20 @@
 		</dict>
 	</array>
 	<key>readme</key>
-	<string>Type `fff` in Alfred, then type to filter files and directories from the front Finder folder.</string>
+	<string>Type `fff` in Alfred to search files and directories from the front Finder folder.
+
+Usage: fff &lt;keyword&gt; [depth|-] [up]
+
+1. keyword (required): one word. Start with ^ for a stricter (exact) match.
+2. depth (optional): a number, or - to keep the default --max-depth.
+3. up (optional): a number of dirs to go up from the Finder dir. 0 means ~.
+
+Examples:
+- fff config          match "config", default depth
+- fff ^config         exact match
+- fff config 3        depth 3
+- fff config 3 2      depth 3, from 2 dirs up
+- fff config - 0      default depth, from ~</string>
 	<key>userconfigurationconfig</key>
 	<array>
 		<dict>
